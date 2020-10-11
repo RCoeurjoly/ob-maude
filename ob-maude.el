@@ -98,7 +98,7 @@
   (add-hook 'inferior-maude-hook
             (lambda ()
               (setq-local comint-prompt-regexp
-                          (concat maude-prompt-regexp "\\|^λ?> "))))
+                          maude-prompt-regexp)))
   (let* ((session (cdr (assq :session params)))
          (result-type (cdr (assq :result-type params)))
          (full-body (org-babel-expand-body:generic
