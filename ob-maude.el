@@ -29,8 +29,7 @@
 
 ;;; Requirements:
 
-;; - maude-mode: http://www.iro.umontreal.ca/~monnier/elisp/#maude-mode
-;; - (optionally) lhs2tex: http://people.cs.uu.nl/andres/lhs2tex/
+;; - maude-mode: https://sourceforge.net/projects/maude-mode/
 
 ;;; Code:
 (require 'ob)
@@ -41,21 +40,18 @@
 (declare-function org-entry-get "org" (pom property &optional inherit literal-nil))
 
 (defvar org-babel-tangle-lang-exts)
-(add-to-list 'org-babel-tangle-lang-exts '("maude" . "hs"))
+(add-to-list 'org-babel-tangle-lang-exts '("maude" . "maude"))
 
 (defvar org-babel-default-header-args:maude
   '((:padlines . "no")))
 
-(defvar org-babel-maude-eoe "*** org-babel-maude-eoe")
+(defconst org-babel-maude-eoe "\"org-babel-maude-eoe\"")
 
 (defvar maude-prompt-regexp)
 
 (defun org-babel-maude-execute (body params)
   "This function should only be called by `org-babel-execute:maude'"
   (let* ((tmp-src-file (org-babel-temp-file "Maude-src-" ".maude"))
-         (tmp-bin-file
-          (org-babel-process-file-name
-           (org-babel-temp-file "Maude-bin-" org-babel-exeext)))
          (cmdline (cdr (assq :cmdline params)))
          (cmdline (if cmdline (concat " " cmdline) ""))
          (flags (cdr (assq :flags params)))
@@ -111,7 +107,7 @@
 		  (session org-babel-maude-eoe t full-body)
                 (insert (org-trim full-body))
                 (comint-send-input nil t)
-                (insert lol)
+                (insert org-babel-maude-eoe)
                 (comint-send-input nil t)))
          (results (mapcar #'org-strip-quotes
 			  (cdr (member org-babel-maude-eoe
@@ -143,7 +139,7 @@ then create one.  Return the initialized session."
   "Load BODY into SESSION."
   (save-window-excursion
     (let* ((buffer (org-babel-prep-session:maude session params))
-           (load-file (concat (org-babel-temp-file "maude-load-") ".hs")))
+           (load-file (concat (org-babel-temp-file "maude-load-") ".maude")))
       (with-temp-buffer
         (insert body) (write-file load-file)
         (maude-mode) (inferior-maude-load-file))
@@ -181,72 +177,6 @@ specifying a variable of the same value."
 		  (backend file
 			   &optional async subtreep visible-only body-only
 			   ext-plist post-process))
-(defun org-babel-maude-export-to-lhs (&optional arg)
-  "Export to a .lhs file with all maude code blocks escaped.
-When called with a prefix argument the resulting
-.lhs file will be exported to a .tex file.  This function will
-create two new files, base-name.lhs and base-name.tex where
-base-name is the name of the current Org file.
-
-Note that all standard Babel literate programming
-constructs (header arguments, no-web syntax etc...) are ignored."
-  (interactive "P")
-  (let* ((contents (buffer-string))
-         (maude-regexp
-          (concat "^\\([ \t]*\\)#\\+begin_src[ \t]maude*\\(.*\\)[\r\n]"
-                  "\\([^\000]*?\\)[\r\n][ \t]*#\\+end_src.*"))
-         (base-name (file-name-sans-extension (buffer-file-name)))
-         (tmp-file (org-babel-temp-file "maude-"))
-         (tmp-org-file (concat tmp-file ".org"))
-         (tmp-tex-file (concat tmp-file ".tex"))
-         (lhs-file (concat base-name ".lhs"))
-         (tex-file (concat base-name ".tex"))
-         (command (concat org-babel-maude-lhs2tex-command
-			  " " (org-babel-process-file-name lhs-file)
-			  " > " (org-babel-process-file-name tex-file)))
-         (preserve-indentp org-src-preserve-indentation)
-         indentation)
-    ;; escape maude source-code blocks
-    (with-temp-file tmp-org-file
-      (insert contents)
-      (goto-char (point-min))
-      (while (re-search-forward maude-regexp nil t)
-        (save-match-data (setq indentation (length (match-string 1))))
-        (replace-match (save-match-data
-                         (concat
-                          "#+begin_export latex\n\\begin{code}\n"
-                          (if (or preserve-indentp
-                                  (string-match "-i" (match-string 2)))
-                              (match-string 3)
-                            (org-remove-indentation (match-string 3)))
-                          "\n\\end{code}\n#+end_export\n"))
-                       t t)
-        (indent-code-rigidly (match-beginning 0) (match-end 0) indentation)))
-    (save-excursion
-      ;; export to latex w/org and save as .lhs
-      (require 'ox-latex)
-      (find-file tmp-org-file)
-      ;; Ensure we do not clutter kill ring with incomplete results.
-      (let (org-export-copy-to-kill-ring)
-	(org-export-to-file 'latex tmp-tex-file))
-      (kill-buffer nil)
-      (delete-file tmp-org-file)
-      (find-file tmp-tex-file)
-      (goto-char (point-min)) (forward-line 2)
-      (insert "%include polycode.fmt\n")
-      ;; ensure all \begin/end{code} statements start at the first column
-      (while (re-search-forward "^[ \t]+\\\\begin{code}[^\000]+\\\\end{code}" nil t)
-        (replace-match (save-match-data (org-remove-indentation (match-string 0)))
-                       t t))
-      (setq contents (buffer-string))
-      (save-buffer) (kill-buffer nil))
-    (delete-file tmp-tex-file)
-    ;; save org exported latex to a .lhs file
-    (with-temp-file lhs-file (insert contents))
-    (if (not arg)
-        (find-file lhs-file)
-      ;; process .lhs file with lhs2tex
-      (message "running %s" command) (shell-command command) (find-file tex-file))))
 
 (provide 'ob-maude)
 
